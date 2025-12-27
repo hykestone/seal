@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数学优章计数器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+    <style>
+        .title-kai {
+            font-family: "KaiTi", "STKaiti", "KaiTi_GB2312", sans-serif;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        .float-animation {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .btn-transition {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-transition:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .table-row-hover:hover {
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen flex flex-col items-center pt-10 pb-20">
+    <!-- 批量操作模态框 -->
+    <div id="batchOperationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modalContent">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">批量修改优章</h3>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label for="studentSelect" class="block text-sm font-medium text-gray-700 mb-2">选择学生</label>
+                    <select id="studentSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <!-- 学生选项将通过JavaScript动态生成 -->
+                    </select>
+                </div>
+                <div>
+                    <label for="meritStampsInput" class="block text-sm font-medium text-gray-700 mb-2">优章数量</label>
+                    <input type="number" id="meritStampsInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="请输入优章数量">
+                </div>
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button id="cancelBatchBtn" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200">取消</button>
+                    <button id="confirmBatchBtn" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">确认修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化AOS动画库
+        document.addEventListener('DOMContentLoaded', function() {
+            AOS.init({
+                duration: 800,
+                easing: 'ease-in-out',
+                once: true
+            });
+        });
+    </script>
+    <div class="w-full max-w-6xl mx-auto relative mb-16 px-4">
+        <div class="text-center mb-8" data-aos="fade-up">
+            <h1 class="title-kai text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-700 mb-8">数学优章计数器</h1>
+        </div>
+        
+        <div class="flex justify-center gap-6 mt-4">
+            <button id="importBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg btn-transition flex items-center justify-center gap-2" data-aos="fade-left" data-aos-delay="100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                导入学生信息
+            </button>
+            <button id="exportBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg btn-transition flex items-center justify-center gap-2" data-aos="fade-left" data-aos-delay="200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                导出学生信息
+            </button>
+            <button id="batchOperationBtn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg btn-transition flex items-center justify-center gap-2" data-aos="fade-left" data-aos-delay="300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                批量操作
+            </button>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
+    </div>
+
+    <!-- 提示消息容器 -->
+    <div id="toast" class="fixed top-6 right-6 transform translate-x-full transition-all duration-500 z-50 max-w-xs"></div>
+
+    <div id="studentTable" class="w-full max-w-5xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden glass-effect" data-aos="fade-up" data-aos-delay="100">
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-6">
+            <div class="flex items-center justify-between">
+                <div class="w-1/12 text-center font-bold text-lg">排名</div>
+                <div class="w-3/12 font-bold pl-10 text-lg">姓名</div>
+                <div class="w-3/12 text-center font-bold text-lg">优章数量</div>
+                <div class="w-3/12 text-center font-bold text-lg">鼓励章数量</div>
+            </div>
+        </div>
+        
+        <!-- 学生列表将通过JavaScript动态生成 -->
+        <div id="studentList" class="divide-y divide-gray-200">
+            <div class="flex items-center justify-between py-4 px-6 table-row-hover transition-colors duration-200">
+                <div class="w-1/12 text-center text-lg font-medium text-gray-800">1</div>
+                <div class="w-3/12 pl-10 text-lg font-medium text-gray-800">张三</div>
+                <div class="w-3/12 flex items-center justify-center">
+                    <button class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-l-lg flex items-center justify-center transition-colors duration-200" onclick="updateCount(this, -1)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9" />
+                        </svg>
+                    </button>
+                    <input type="number" value="0" min="0" class="w-16 border-y border-gray-300 text-center text-lg font-medium text-gray-800 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" inputmode="numeric" readonly style="text-align: center; -moz-appearance: textfield; -webkit-appearance: textfield; margin: 0;">
+                    <button class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-r-lg flex items-center justify-center transition-colors duration-200" onclick="updateCount(this, 1)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="w-3/12 flex items-center justify-center">
+                    <button class="bg-green-100 hover:bg-green-200 text-green-700 w-10 h-10 rounded-l-lg flex items-center justify-center transition-colors duration-200" onclick="updateScore(this, -1)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9" />
+                        </svg>
+                    </button>
+                    <input type="number" value="0" min="0" class="w-16 border-y border-gray-300 text-center text-lg font-medium text-gray-800 py-1 focus:outline-none focus:ring-2 focus:ring-green-500" inputmode="numeric" readonly style="text-align: center; -moz-appearance: textfield; -webkit-appearance: textfield; margin: 0;">
+                    <button class="bg-green-100 hover:bg-green-200 text-green-700 w-10 h-10 rounded-r-lg flex items-center justify-center transition-colors duration-200" onclick="updateScore(this, 1)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作模态框 -->
+    <div id="batchOperationModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modalContent">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">批量修改优章</h3>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label for="studentSelect" class="block text-sm font-medium text-gray-700 mb-2">选择学生</label>
+                    <select id="studentSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                        <!-- 学生选项将通过JavaScript动态生成 -->
+                    </select>
+                </div>
+                <div>
+                    <label for="meritStampsInput" class="block text-sm font-medium text-gray-700 mb-2">优章数量</label>
+                    <input type="number" id="meritStampsInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="请输入优章数量">
+                </div>
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button id="cancelBatchBtn" class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors duration-200">取消</button>
+                    <button id="confirmBatchBtn" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors duration-200">确认修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量，用于存储学生数据
+        let studentData = [];
+
+        // 为导入按钮添加点击事件
+        document.getElementById('importBtn').addEventListener('click', function() {
+            // 触发文件选择对话框
+            document.getElementById('fileInput').click();
+        });
+        
+        // 为导出按钮添加点击事件
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            exportStudentInfo();
+        });
+
+        // 为批量操作按钮添加点击事件
+        document.getElementById('batchOperationBtn').addEventListener('click', function() {
+            showBatchOperationModal();
+        });
+
+        // 为关闭模态框按钮添加点击事件
+        document.getElementById('closeModalBtn').addEventListener('click', function() {
+            hideBatchOperationModal();
+        });
+
+        // 为取消按钮添加点击事件
+        document.getElementById('cancelBatchBtn').addEventListener('click', function() {
+            hideBatchOperationModal();
+        });
+
+        // 为确认修改按钮添加点击事件
+        document.getElementById('confirmBatchBtn').addEventListener('click', function() {
+            confirmBatchOperation();
+        });
+        
+        // 导出学生信息为Excel文件
+        function exportStudentInfo() {
+            if (studentData.length === 0) {
+                showToast('导出失败：没有学生数据可导出。', 'error');
+                return;
+            }
+            
+            try {
+                // 准备导出数据（不包含排名）
+                const exportData = studentData.map((student) => ({
+                    '姓名': student.name,
+                    '优章数量': student.meritStamps,
+                    '鼓励章数量': student.encouragementStamps
+                }));
+                
+                // 创建工作簿
+                const workbook = XLSX.utils.book_new();
+                const worksheet = XLSX.utils.json_to_sheet(exportData);
+                
+                // 添加工作表到工作簿
+                XLSX.utils.book_append_sheet(workbook, worksheet, '学生信息');
+                
+                // 生成Excel文件并下载
+                const fileName = '学生优章信息_' + new Date().toLocaleDateString() + '.xlsx';
+                XLSX.writeFile(workbook, fileName);
+                
+                showToast('导出成功！文件已下载：' + fileName, 'success');
+            } catch (error) {
+                showToast('导出失败：' + error.message, 'error');
+                console.error('导出Excel文件时出错：', error);
+            }
+        }
+
+        // 为文件输入框添加change事件
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                console.log('正在处理文件:', file.name);
+                
+                // 使用SheetJS库解析Excel文件
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    console.log('文件读取成功，正在解析...');
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        console.log('数据转换为Uint8Array成功');
+                        
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        console.log('工作簿解析成功，包含工作表:', workbook.SheetNames.join(', '));
+                        
+                        // 获取第一个工作表
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        console.log('正在处理工作表:', firstSheetName);
+                        
+                        // 将工作表转换为JSON格式
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                        console.log('工作表转换为JSON成功，共', jsonData.length, '行数据');
+                        
+                        // 检查数据是否为空
+                        if (jsonData.length === 0) {
+                            showToast('导入失败：Excel文件中没有数据。', 'error');
+                            return;
+                        }
+                        
+                        // 检查第一行是否包含所需的列名
+                        const firstRow = jsonData[0];
+                        const requiredColumns = ['姓名', '优章', '鼓励章'];
+                        console.log('\n正在验证列名...');
+                        console.log('Excel文件中的列名:', Object.keys(firstRow).join(', '));
+                        
+                        const hasAllRequiredColumns = requiredColumns.every(requiredColumn => 
+                            Object.keys(firstRow).some(key => key.trim() === requiredColumn.trim())
+                        );
+                        
+                        if (!hasAllRequiredColumns) {
+                            showToast('导入失败：文件格式不正确，第一行必须包含“姓名”、“优章”、“鼓励章”。', 'error');
+                            return;
+                        }
+                        
+                        // 格式化数据
+                        studentData = jsonData.map(row => {
+                            const nameKey = Object.keys(row).find(key => key.trim() === '姓名');
+                            const meritKey = Object.keys(row).find(key => key.trim() === '优章');
+                            const encouragementKey = Object.keys(row).find(key => key.trim() === '鼓励章');
+                            
+                            return {
+                                name: nameKey ? row[nameKey] : '',
+                                meritStamps: meritKey ? parseInt(row[meritKey]) || 0 : 0,
+                                encouragementStamps: encouragementKey ? parseInt(row[encouragementKey]) || 0 : 0
+                            };
+                        });
+                        
+                        // 按优章数量排序
+                        studentData.sort((a, b) => b.meritStamps - a.meritStamps);
+                        
+                        // 导入成功，更新页面
+                        showToast('导入成功！共导入 ' + studentData.length + ' 名学生的信息。', 'success');
+                        renderStudentList();
+// 显示学生信息的调用已移除
+                        
+                    } catch (error) {
+                        showToast('导入失败：解析文件时出错。请检查文件格式。错误详情：' + error.message, 'error');
+                        console.error('导入失败:', error);
+                        // 显示更详细的错误信息
+                        alert('导入失败：' + error.message + '\n\n请确保：\n1. Excel文件格式正确\n2. 第一行包含"姓名"、"优章"、"鼓励章"列\n3. 文件未被其他程序占用\n\n详细错误信息已显示在浏览器控制台（按F12查看）');
+                    }
+                };
+                reader.onerror = function() {
+                    showToast('导入失败：读取文件时出错。', 'error');
+                };
+                // 读取用户选择的文件
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // 显示提示消息
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.className = 'fixed top-6 right-6 transform transition-all duration-500 z-50 max-w-xs px-6 py-4 rounded-lg shadow-xl flex items-center gap-3';
+            
+            if (type === 'success') {
+                toast.classList.add('bg-green-500', 'text-white');
+                toast.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>${message}</span>
+                `;
+            } else if (type === 'error') {
+                toast.classList.add('bg-red-500', 'text-white');
+                toast.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>${message}</span>
+                `;
+            }
+            
+            toast.classList.remove('translate-x-full', 'opacity-0');
+            toast.classList.add('translate-x-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-x-0', 'opacity-100');
+                toast.classList.add('translate-x-full', 'opacity-0');
+            }, 4000);
+        }
+
+        // 渲染学生列表
+        function renderStudentList() {
+            const studentList = document.getElementById('studentList');
+            studentList.innerHTML = '';
+            
+            studentData.forEach((student, index) => {
+                // 根据排名添加特殊样式
+                let rankClass = '';
+                let rankIcon = '';
+                
+                if (index === 0) {
+                    rankClass = 'text-yellow-500 font-bold';
+                    rankIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>';
+                } else if (index === 1) {
+                    rankClass = 'text-gray-400 font-bold';
+                    rankIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>';
+                } else if (index === 2) {
+                    rankClass = 'text-amber-700 font-bold';
+                    rankIcon = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>';
+                }
+                
+                const studentRow = document.createElement('div');
+                studentRow.className = 'flex items-center justify-between py-4 px-6 table-row-hover transition-colors duration-200';
+                studentRow.setAttribute('data-aos', 'fade-up');
+                studentRow.setAttribute('data-aos-delay', (index * 50).toString());
+                
+                studentRow.innerHTML = `
+                    <div class="w-1/12 text-center text-lg font-medium ${rankClass}">${rankIcon}${index + 1}</div>
+                    <div class="w-3/12 pl-10 text-lg font-medium text-gray-800">${student.name}</div>
+                    <div class="w-3/12 flex items-center justify-center">
+                        <button class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-l-lg flex items-center justify-center transition-colors duration-200" onclick="updateCount(${index}, -1)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9" />
+                            </svg>
+                        </button>
+                        <input type="number" value="${student.meritStamps}" min="0" class="w-16 border-y border-gray-300 text-center text-lg font-medium text-gray-800 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500" inputmode="numeric" readonly style="text-align: center; -moz-appearance: textfield; -webkit-appearance: textfield; margin: 0;">
+                        <button class="bg-blue-100 hover:bg-blue-200 text-blue-700 w-10 h-10 rounded-r-lg flex items-center justify-center transition-colors duration-200" onclick="updateCount(${index}, 1)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="w-3/12 flex items-center justify-center">
+                        <button class="bg-green-100 hover:bg-green-200 text-green-700 w-10 h-10 rounded-l-lg flex items-center justify-center transition-colors duration-200" onclick="updateScore(${index}, -1)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9" />
+                            </svg>
+                        </button>
+                        <input type="number" value="${student.encouragementStamps}" min="0" class="w-16 border-y border-gray-300 text-center text-lg font-medium text-gray-800 py-1 focus:outline-none focus:ring-2 focus:ring-green-500" inputmode="numeric" readonly style="text-align: center; -moz-appearance: textfield; -webkit-appearance: textfield; margin: 0;">
+                        <button class="bg-green-100 hover:bg-green-200 text-green-700 w-10 h-10 rounded-r-lg flex items-center justify-center transition-colors duration-200" onclick="updateScore(${index}, 1)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                studentList.appendChild(studentRow);
+            });
+            
+            // 重新初始化AOS动画
+            setTimeout(() => {
+                AOS.refresh();
+            }, 100);
+
+            // 更新批量操作模态框中的学生列表
+            updateStudentSelectOptions();
+        }
+
+// 显示学生信息的函数已移除
+
+        // 更新优章数量
+        function updateCount(index, change) {
+            // 保存当前数据的副本用于比较
+            const oldData = JSON.parse(JSON.stringify(studentData));
+            
+            // 更新数据（允许负数）
+            studentData[index].meritStamps = studentData[index].meritStamps + change;
+            
+            // 重新排序
+            studentData.sort((a, b) => b.meritStamps - a.meritStamps);
+            
+            // 检查排名是否发生变化
+            let rankingChanged = false;
+            for (let i = 0; i < studentData.length; i++) {
+                if (studentData[i].name !== oldData[i].name) {
+                    rankingChanged = true;
+                    break;
+                }
+            }
+            
+            // 只有排名变化时才重新渲染
+            if (rankingChanged) {
+                renderStudentList();
+            } else {
+                // 如果排名没变，只更新当前行的显示值
+                const rowElement = document.querySelectorAll('#studentList > div')[index];
+                if (rowElement) {
+                    const countInput = rowElement.querySelector('input');
+                    if (countInput) {
+                        countInput.value = studentData[index].meritStamps;
+                    }
+                }
+            }
+        }
+
+        // 显示批量操作模态框
+        function showBatchOperationModal() {
+            const modal = document.getElementById('batchOperationModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            // 更新学生选择列表
+            updateStudentSelectOptions();
+            
+            // 显示模态框
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 隐藏批量操作模态框
+        function hideBatchOperationModal() {
+            const modal = document.getElementById('batchOperationModal');
+            const modalContent = document.getElementById('modalContent');
+            
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 更新学生选择下拉框选项
+        function updateStudentSelectOptions() {
+            const selectElement = document.getElementById('studentSelect');
+            selectElement.innerHTML = '';
+            
+            if (studentData.length === 0) {
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = '暂无学生数据';
+                emptyOption.disabled = true;
+                selectElement.appendChild(emptyOption);
+                return;
+            }
+            
+            studentData.forEach((student, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${student.name} (当前优章: ${student.meritStamps})`;
+                selectElement.appendChild(option);
+            });
+        }
+
+        // 确认批量操作
+        function confirmBatchOperation() {
+            const selectElement = document.getElementById('studentSelect');
+            const inputElement = document.getElementById('meritStampsInput');
+            
+            const selectedIndex = parseInt(selectElement.value);
+            const newMeritStamps = parseInt(inputElement.value);
+            
+            // 验证输入
+            if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= studentData.length) {
+                showToast('请选择有效的学生', 'error');
+                return;
+            }
+            
+            if (isNaN(newMeritStamps)) {
+                showToast('请输入有效的优章数量', 'error');
+                return;
+            }
+            
+            // 保存当前数据的副本用于比较
+            const oldData = JSON.parse(JSON.stringify(studentData));
+            
+            // 更新优章数量
+            studentData[selectedIndex].meritStamps = newMeritStamps;
+            
+            // 重新排序
+            studentData.sort((a, b) => b.meritStamps - a.meritStamps);
+            
+            // 检查排名是否发生变化
+            let rankingChanged = false;
+            for (let i = 0; i < studentData.length; i++) {
+                if (studentData[i].name !== oldData[i].name) {
+                    rankingChanged = true;
+                    break;
+                }
+            }
+            
+            // 重新渲染列表
+            renderStudentList();
+            
+            // 显示成功提示
+            showToast(`已成功修改 ${studentData.find(s => s.name === oldData[selectedIndex].name).name} 的优章数量为 ${newMeritStamps}`, 'success');
+            
+            // 隐藏模态框
+            hideBatchOperationModal();
+        }
+
+        // 更新鼓励章数量
+        function updateScore(index, change) {
+            // 保存当前数据的副本用于比较
+            const oldData = JSON.parse(JSON.stringify(studentData));
+            
+            // 更新数据
+            studentData[index].encouragementStamps = Math.max(0, studentData[index].encouragementStamps + change);
+            
+            // 如果鼓励章数量达到6，兑换为1个优章
+            let exchanged = false;
+            if (studentData[index].encouragementStamps >= 6) {
+                const exchangedStamps = Math.floor(studentData[index].encouragementStamps / 6);
+                studentData[index].encouragementStamps %= 6;
+                studentData[index].meritStamps += exchangedStamps;
+                exchanged = true;
+                
+                if (exchangedStamps > 0) {
+                    showToast(`已自动兑换 ${exchangedStamps} 个优章`, 'success');
+                }
+            }
+            
+            // 只有在兑换优章时才需要重新排序（因为优章数量变化了）
+            if (exchanged) {
+                studentData.sort((a, b) => b.meritStamps - a.meritStamps);
+            }
+            
+            // 检查排名是否发生变化
+            let rankingChanged = false;
+            for (let i = 0; i < studentData.length; i++) {
+                if (studentData[i].name !== oldData[i].name) {
+                    rankingChanged = true;
+                    break;
+                }
+            }
+            
+            // 只有排名变化时才重新渲染
+            if (rankingChanged) {
+                renderStudentList();
+            } else {
+                // 如果排名没变，只更新当前行的显示值
+                const rowElement = document.querySelectorAll('#studentList > div')[index];
+                if (rowElement) {
+                    const inputs = rowElement.querySelectorAll('input');
+                    if (inputs.length >= 2) {
+                        inputs[0].value = studentData[index].meritStamps;
+                        inputs[1].value = studentData[index].encouragementStamps;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
